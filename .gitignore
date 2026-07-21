@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Testing & Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# VLM Studio Generated Artifacts & Datasets
+datasets/
+predictions/
+visualizations/
+results/
+*.json
+!requirements.txt
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
