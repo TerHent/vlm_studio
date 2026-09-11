@@ -20,6 +20,7 @@ class EvaluatorConfig:
     conf_threshold: float = 0.0
     api_base: Optional[str] = None
     api_key: Optional[str] = None
+    images_dir: Optional[str] = None
 
     def validate(self) -> None:
         valid_modes = ["all", "predict", "evaluate"]

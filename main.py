@@ -82,6 +82,12 @@ def parse_args() -> argparse.Namespace:
         default="auto",
         help="Execution device: auto, cuda, mps, cpu (default: auto)"
     )
+    model_group.add_argument(
+        "--images-dir",
+        type=str,
+        default=None,
+        help="Optional directory containing images (useful if images are stored separately from COCO annotation JSON)"
+    )
 
     # API & Endpoint Parameters
     api_group = parser.add_argument_group("API & Endpoint Parameters (for LM Studio / vLLM / OpenAI endpoints)")
@@ -177,6 +183,8 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
     print(f"  Mode:            {config.mode.upper()}")
     print(f"  Model:           {config.model_name}")
     print(f"  Dataset:         {config.dataset_path} ({config.dataset_split})")
+    if config.images_dir:
+        print(f"  Images Dir:      {config.images_dir}")
     print(f"  Prediction Cache: {prediction_cache_file}")
     print("----------------------------------------------------------------")
 
@@ -185,9 +193,14 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
     # 1. INFERENCE / PREDICT PHASE (Required for 'predict' and 'all' modes)
     if config.mode in ["predict", "all"]:
         print("\nLoading dataset for inference...")
-        loader = DatasetLoader(dataset_path=config.dataset_path, split=config.dataset_split)
+        loader = DatasetLoader(
+            dataset_path=config.dataset_path, 
+            split=config.dataset_split,
+            images_dir=config.images_dir
+        )
         dataset_length = len(loader)
-        print(f"Successfully loaded dataset with {dataset_length} samples.")
+        format_info = f"COCO JSON ({loader.coco_json_path})" if loader.is_coco else "Hugging Face"
+        print(f"Successfully loaded {format_info} dataset with {dataset_length} samples.")
         
         limit = config.max_samples if config.max_samples is not None else dataset_length
         run_samples = min(limit, dataset_length)
@@ -274,7 +287,11 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
     if config.visualize and config.mode == "evaluate":
         try:
             print("Loading dataset images for offline visualization rendering...")
-            dataset_loader_for_vis = DatasetLoader(dataset_path=config.dataset_path, split=config.dataset_split)
+            dataset_loader_for_vis = DatasetLoader(
+                dataset_path=config.dataset_path, 
+                split=config.dataset_split,
+                images_dir=config.images_dir
+            )
             for img, _, f_name in dataset_loader_for_vis:
                 image_lookup_map[f_name] = img
         except Exception as e:
@@ -311,6 +328,7 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
         "model_name": config.model_name,
         "dataset_path": config.dataset_path,
         "dataset_split": config.dataset_split,
+        "images_dir": config.images_dir,
         "label_map": config.label_map,
         "conf_threshold": config.conf_threshold,
         "iou_thresholds": config.iou_thresholds,
@@ -407,7 +425,8 @@ def main() -> None:
         predictions_dir=args.predictions_dir,
         conf_threshold=args.conf_threshold,
         api_base=args.api_base,
-        api_key=args.api_key
+        api_key=args.api_key,
+        images_dir=args.images_dir
     )
     
     try:

@@ -23,8 +23,12 @@ It provides an end-to-end evaluation pipeline that supports local models (via LM
 * **Standard COCO Benchmark Evaluation by Default (`--iou-thresholds`):**
   * Evaluates models by default across standard 10-step COCO IoU thresholds (`[0.50:0.95:0.05]`), reporting primary **COCO mAP@[.50:.95]**, **mAP@.50 (AP50)**, **mAP@.75 (AP75)**, and per-category AP breakdowns.
   * Supports `'coco'` (default), range syntax (e.g., `'0.5:0.95:0.05'`), or custom thresholds (e.g. `'0.3,0.5'`).
+* **Flexible Dataset Loading (COCO JSON & Hugging Face):**
+  * Supports standard COCO JSON format files (`instances_*.json`, `_annotations.coco.json`) and standard COCO directory layouts with automatic split detection.
+  * Optional `--images-dir` to specify image location if stored separately from annotations.
+  * Supports Hugging Face datasets (local and Hub) with both standard sequence columns and text-based response coordinates.
 * **Fully Tested:** 
-  * Comprehensive test suite using `pytest` verifying metrics calculations, adapter parsing, image visualizer math, and prediction cache I/O.
+  * Comprehensive test suite using `pytest` verifying metrics calculations, adapter parsing, COCO and Hugging Face dataset loading, image visualizer math, and prediction cache I/O.
 
 ---
 
@@ -79,6 +83,16 @@ python3 main.py \
   --mode evaluate \
   --iou-thresholds "0.3,0.5" \
   --visualize
+```
+
+### Evaluating on Standard COCO Datasets
+Supports direct JSON file paths or COCO directory hierarchies with optional separate images directory:
+```bash
+python3 main.py \
+  --model zai-org/glm-4.6v-flash \
+  --dataset path/to/annotations/instances_val2017.json \
+  --images-dir path/to/val2017 \
+  --mode all
 ```
 
 ---
