@@ -1,5 +1,9 @@
 # VLM Studio: Local Vision-Language Model Object Detection Evaluator
 
+[![Tests](https://github.com/TerHent/vlm_studio/actions/workflows/test.yml/badge.svg)](https://github.com/TerHent/vlm_studio/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
 **VLM Studio** is a modular evaluation framework designed for benchmarking Vision-Language Models (VLMs) on object detection tasks. 
 
 It provides an end-to-end evaluation pipeline that supports local models (via LM Studio, Florence-2, PaliGemma, Qwen, GLM-4V), structured dataset loading, offline prediction caching, static label aliasing, mathematically verified mAP metrics, and side-by-side ground truth vs prediction image exports.
