@@ -20,6 +20,19 @@ def get_class_color(label: str) -> Tuple[int, int, int]:
     val = sum(ord(c) for c in label)
     return palette[val % len(palette)]
 
+def get_scaled_font(image_height: int) -> ImageFont.ImageFont:
+    """Attempts to load a scalable font sized appropriately for the image height, falling back to default."""
+    font_size = max(11, min(36, int(image_height * 0.025)))
+    for font_name in ["DejaVuSans.ttf", "LiberationSans-Regular.ttf", "FreeSans.ttf", "Arial.ttf"]:
+        try:
+            return ImageFont.truetype(font_name, font_size)
+        except Exception:
+            continue
+    try:
+        return ImageFont.load_default()
+    except Exception:
+        return None
+
 def draw_boxes(
     image: Image.Image, 
     annotations: List[Dict[str, Any]], 
@@ -27,16 +40,14 @@ def draw_boxes(
 ) -> Image.Image:
     """Draws bounding boxes and labels on a copy of the image.
     
-    Uses distinct colors for different categories.
+    Uses distinct colors for different categories. Prevents label clipping at top edges.
     """
     img_copy = image.copy()
     draw = ImageDraw.Draw(img_copy)
     w, h = img_copy.size
     
-    try:
-        font = ImageFont.load_default()
-    except Exception:
-        font = None
+    font = get_scaled_font(h)
+    line_width = max(2, min(6, int(h * 0.003)))
 
     for ann in annotations:
         bbox = ann.get("bbox")
@@ -64,7 +75,7 @@ def draw_boxes(
         color = get_class_color(label)
         
         # Draw bounding box rectangle
-        draw.rectangle([x0, y0, x1, y1], outline=color, width=3)
+        draw.rectangle([x0, y0, x1, y1], outline=color, width=line_width)
         
         # Format label text
         if is_prediction and score is not None:
@@ -72,22 +83,30 @@ def draw_boxes(
         else:
             text = label
             
-        # Draw background block for label text
+        # Measure label text size
         try:
             if hasattr(draw, "textbbox") and font:
                 tx0, ty0, tx1, ty1 = draw.textbbox((x0, y0), text, font=font)
                 tw = tx1 - tx0
                 th = ty1 - ty0
             else:
-                tw, th = draw.textsize(text) if hasattr(draw, "textsize") else (len(text) * 6, 10)
+                tw, th = draw.textsize(text) if hasattr(draw, "textsize") else (len(text) * 7, 12)
         except Exception:
-            tw, th = len(text) * 6, 10
+            tw, th = len(text) * 7, 12
             
         # Draw text background box
-        draw.rectangle([x0, max(0, y0 - th - 4), x0 + tw + 6, y0], fill=color)
-        
-        # Draw label text in white
-        draw.text((x0 + 3, max(0, y0 - th - 2)), text, fill=(255, 255, 255), font=font)
+        # If bounding box is near top edge, place label inside the box to avoid clipping
+        if y0 - th - 4 < 0:
+            label_y0 = y0
+            label_y1 = min(h, y0 + th + 4)
+            text_y = y0 + 2
+        else:
+            label_y0 = y0 - th - 4
+            label_y1 = y0
+            text_y = y0 - th - 2
+
+        draw.rectangle([x0, label_y0, min(w, x0 + tw + 6), label_y1], fill=color)
+        draw.text((x0 + 3, text_y), text, fill=(255, 255, 255), font=font)
         
     return img_copy
 
@@ -115,10 +134,7 @@ def create_side_by_side(
     # Draw headers text
     draw = ImageDraw.Draw(combined)
     
-    try:
-        font = ImageFont.load_default()
-    except Exception:
-        font = None
+    font = get_scaled_font(h)
         
     # Draw Left panel header text: "GROUND TRUTH"
     draw.text((20, 10), "GROUND TRUTH (LEFT)", fill=(46, 204, 113), font=font)

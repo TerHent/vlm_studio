@@ -16,6 +16,14 @@ def test_draw_boxes() -> None:
     assert isinstance(drawn, Image.Image)
     assert drawn.size == (100, 100)
 
+def test_draw_boxes_top_edge() -> None:
+    # Test box starting at y0 = 0 to verify no clipping or crash
+    img = Image.new("RGB", (100, 100), color="white")
+    annotations = [{"bbox": [0.0, 0.1, 0.5, 0.5], "label": "person"}]
+    drawn = draw_boxes(img, annotations)
+    assert isinstance(drawn, Image.Image)
+    assert drawn.size == (100, 100)
+
 def test_create_side_by_side() -> None:
     img = Image.new("RGB", (100, 100), color="white")
     gts = [{"bbox": [0.1, 0.1, 0.5, 0.5], "label": "person"}]

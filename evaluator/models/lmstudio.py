@@ -9,14 +9,26 @@ from evaluator.models.base import BaseVLMAdapter
 class LMStudioAdapter(BaseVLMAdapter):
     """Adapter for OpenAI-compatible local endpoints (e.g., LM Studio, vLLM, Ollama) hosting VLMs."""
     
-    def __init__(self, model_name: str, device: str, classes: Optional[List[str]] = None) -> None:
+    def __init__(
+        self, 
+        model_name: str, 
+        device: str, 
+        classes: Optional[List[str]] = None,
+        api_base: Optional[str] = None,
+        api_key: Optional[str] = None
+    ) -> None:
         super().__init__(model_name, device)
         self.classes = classes or []
         
-        # Load API Base URL from env or fallback to default LM Studio port 1234
         import os
-        api_base = os.environ.get("LM_STUDIO_API_BASE") or os.environ.get("OPENAI_API_BASE") or "http://127.0.0.1:1234/v1"
-        self.endpoint = f"{api_base.rstrip('/')}/chat/completions"
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("LM_STUDIO_API_KEY")
+        resolved_base = (
+            api_base or 
+            os.environ.get("LM_STUDIO_API_BASE") or 
+            os.environ.get("OPENAI_API_BASE") or 
+            "http://127.0.0.1:1234/v1"
+        )
+        self.endpoint = f"{resolved_base.rstrip('/')}/chat/completions"
 
     def predict(self, image: Image.Image) -> List[Dict[str, Any]]:
         # 1. Convert Image to base64 string
@@ -57,6 +69,8 @@ class LMStudioAdapter(BaseVLMAdapter):
         }
         
         headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         
         # 4. Query the API
         try:

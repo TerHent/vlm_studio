@@ -14,10 +14,12 @@ It provides an end-to-end evaluation pipeline that supports local models (via LM
   * `evaluate`: Loads cached predictions and evaluates metrics & visualizations **instantly offline (under 1 sec)** without touching GPU/LLM resources.
 * **Defensive Output Parsing & Recovery:**
   * Handles JSON syntax quirks, `bbox_2d` key shifts, duplicate closing brackets (`]]`), trailing commas, single quotes, and truncated tokens.
+* **Flexible Endpoints & Authentication (`--api-base`, `--api-key`):**
+  * Connect directly to LM Studio, vLLM, Ollama, or remote OpenAI-compatible endpoints with custom URLs and authorization headers.
 * **Side-by-Side Dual-Panel Visualizer:**
-  * Renders composite comparison JPEGs displaying **Ground Truth (Left)** vs. **Model Predictions (Right)** with stable category colors and panel headers.
-* **Label Mapping & Synonym Aliasing (`--label-map`):**
-  * Map model synonym outputs (e.g. `"Milk Container": "Milk Pitcher"`) to dataset taxonomy without modifying ground truth files.
+  * Renders composite comparison JPEGs displaying **Ground Truth (Left)** vs. **Model Predictions (Right)** with stable category colors, adaptive resolution-scaled fonts, and top-edge clipping protection.
+* **Label Mapping & Confidence Filtering (`--label-map`, `--conf-threshold`):**
+  * Map model synonym outputs to dataset taxonomy and filter out low-confidence predictions.
 * **Standard COCO Benchmark Evaluation by Default (`--iou-thresholds`):**
   * Evaluates models by default across standard 10-step COCO IoU thresholds (`[0.50:0.95:0.05]`), reporting primary **COCO mAP@[.50:.95]**, **mAP@.50 (AP50)**, **mAP@.75 (AP75)**, and per-category AP breakdowns.
   * Supports `'coco'` (default), range syntax (e.g., `'0.5:0.95:0.05'`), or custom thresholds (e.g. `'0.3,0.5'`).

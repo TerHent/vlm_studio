@@ -7,7 +7,9 @@ from evaluator.models.lmstudio import LMStudioAdapter
 def get_model_adapter(
     model_name: str, 
     device: str, 
-    classes: Optional[List[str]] = None
+    classes: Optional[List[str]] = None,
+    api_base: Optional[str] = None,
+    api_key: Optional[str] = None
 ) -> BaseVLMAdapter:
     """Factory function to resolve and instantiate VLM adapters by name."""
     name_lower = model_name.lower()
@@ -18,7 +20,13 @@ def get_model_adapter(
         return PaliGemmaAdapter(model_name=model_name, device=device, classes=classes)
     else:
         # Fall back to LM Studio / local OpenAI-compatible endpoint hosting VLMs
-        return LMStudioAdapter(model_name=model_name, device=device, classes=classes)
+        return LMStudioAdapter(
+            model_name=model_name, 
+            device=device, 
+            classes=classes,
+            api_base=api_base,
+            api_key=api_key
+        )
 
 
 

@@ -89,11 +89,13 @@ class DetectionEvaluator:
         self, 
         label_map: Optional[Dict[str, str]] = None, 
         iou_thresholds: Optional[Union[List[float], Tuple[float, ...], str]] = None,
-        ap_method: str = "all_points"
+        ap_method: str = "all_points",
+        conf_threshold: float = 0.0
     ) -> None:
         self.label_map = label_map or {}
         self.iou_thresholds = parse_iou_thresholds(iou_thresholds)
         self.ap_method = ap_method
+        self.conf_threshold = conf_threshold
         self.all_predictions: List[Dict[str, Any]] = []
         self.all_ground_truths: List[Dict[str, Any]] = []
         self.image_counter = 0
@@ -109,6 +111,9 @@ class DetectionEvaluator:
         self.image_counter += 1
         
         for p in predictions:
+            score = float(p.get("score", 1.0))
+            if score < self.conf_threshold:
+                continue
             # Map predictions to standard vocabulary
             raw_label = p["label"]
             mapped_label = self.label_map.get(raw_label, raw_label)
@@ -116,7 +121,7 @@ class DetectionEvaluator:
                 "image_id": img_idx,
                 "bbox": p["bbox"],
                 "label": mapped_label,
-                "score": p.get("score", 1.0),
+                "score": score,
                 "orig_label": raw_label
             })
             

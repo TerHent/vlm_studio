@@ -148,4 +148,15 @@ def test_lmstudio_parser() -> None:
     assert adapter.parse_output("None", (800, 600)) == []
     assert adapter.parse_output("No objects detected in the image.", (800, 600)) == []
 
+def test_lmstudio_adapter_api_config() -> None:
+    from evaluator.models.lmstudio import LMStudioAdapter
+    adapter = LMStudioAdapter(
+        model_name="qwen-vl", 
+        device="cpu", 
+        api_base="http://localhost:8000/v1", 
+        api_key="secret-key-123"
+    )
+    assert adapter.endpoint == "http://localhost:8000/v1/chat/completions"
+    assert adapter.api_key == "secret-key-123"
+
 

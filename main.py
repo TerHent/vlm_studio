@@ -83,6 +83,21 @@ def parse_args() -> argparse.Namespace:
         help="Execution device: auto, cuda, mps, cpu (default: auto)"
     )
 
+    # API & Endpoint Parameters
+    api_group = parser.add_argument_group("API & Endpoint Parameters (for LM Studio / vLLM / OpenAI endpoints)")
+    api_group.add_argument(
+        "--api-base",
+        type=str,
+        default=None,
+        help="Base URL for OpenAI-compatible VLM server (e.g., http://localhost:1234/v1 or http://localhost:8000/v1)"
+    )
+    api_group.add_argument(
+        "--api-key",
+        type=str,
+        default=None,
+        help="Optional API key for authenticated endpoints (or set OPENAI_API_KEY / LM_STUDIO_API_KEY env vars)"
+    )
+
     # Evaluation & Metrics Parameters
     eval_group = parser.add_argument_group("Evaluation & Metrics Parameters")
     eval_group.add_argument(
@@ -90,6 +105,12 @@ def parse_args() -> argparse.Namespace:
         type=str, 
         default="{}",
         help="JSON string or path to a JSON file mapping prediction categories to ground truth classes"
+    )
+    eval_group.add_argument(
+        "--conf-threshold",
+        type=float,
+        default=0.0,
+        help="Minimum confidence score threshold to retain predictions for evaluation (default: 0.0)"
     )
     eval_group.add_argument(
         "--iou-thresholds", 
@@ -180,7 +201,9 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
         adapter = get_model_adapter(
             model_name=config.model_name, 
             device=config.device, 
-            classes=classes
+            classes=classes,
+            api_base=config.api_base,
+            api_key=config.api_key
         )
 
         print("\nRunning model inference...")
@@ -199,6 +222,20 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
                 "ground_truths": ground_truths,
                 "predictions": predictions
             })
+
+            # In 'all' mode, render and save visualization directly while image is already loaded in RAM
+            if config.mode == "all" and config.visualize:
+                mapped_predictions = []
+                for p in predictions:
+                    lbl = p["label"]
+                    mapped_lbl = config.label_map.get(lbl, lbl)
+                    mapped_predictions.append({
+                        "bbox": p["bbox"],
+                        "label": mapped_lbl,
+                        "score": p.get("score", 1.0)
+                    })
+                comp_img = create_side_by_side(image, ground_truths, mapped_predictions)
+                save_visualization(comp_img, config.visualize_dir, file_name)
 
         # Save raw predictions to cache (overwriting existing cache)
         cache_metadata = {
@@ -228,13 +265,12 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
     # 3. METRICS EVALUATION & VISUALIZATION PHASE
     evaluator = DetectionEvaluator(
         label_map=config.label_map, 
-        iou_thresholds=config.iou_thresholds
+        iou_thresholds=config.iou_thresholds,
+        conf_threshold=config.conf_threshold
     )
 
-    # Optional dataset loader for loading original images during offline evaluation visualization
-    dataset_loader_for_vis: Optional[DatasetLoader] = None
+    # Optional dataset image loading for offline evaluate mode visualization
     image_lookup_map: Dict[str, Any] = {}
-    
     if config.visualize and config.mode == "evaluate":
         try:
             print("Loading dataset images for offline visualization rendering...")
@@ -245,14 +281,6 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
             print(f"[Warning] Could not load dataset images for offline visualization: {e}", file=sys.stderr)
 
     print("\nMatching detections and calculating metrics...")
-    
-    # In 'all' mode, we have access to loaded images during the loop if loader was present
-    loader_ref = DatasetLoader(dataset_path=config.dataset_path, split=config.dataset_split) if (config.visualize and config.mode == "all") else None
-    loader_img_map: Dict[str, Any] = {}
-    if loader_ref:
-        for img, _, f_name in loader_ref:
-            loader_img_map[f_name] = img
-
     for sample in tqdm(samples):
         file_name = sample["file_name"]
         ground_truths = sample["ground_truths"]
@@ -260,9 +288,9 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
         
         evaluator.update(predictions=predictions, ground_truths=ground_truths)
 
-        if config.visualize:
-            # Look up original image
-            img = image_lookup_map.get(file_name) or loader_img_map.get(file_name)
+        # In evaluate mode, look up original image and render side-by-side comparison
+        if config.visualize and config.mode == "evaluate":
+            img = image_lookup_map.get(file_name)
             if img:
                 mapped_predictions = []
                 for p in predictions:
@@ -284,8 +312,10 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
         "dataset_path": config.dataset_path,
         "dataset_split": config.dataset_split,
         "label_map": config.label_map,
+        "conf_threshold": config.conf_threshold,
         "iou_thresholds": config.iou_thresholds,
         "max_samples": config.max_samples,
+        "api_base": config.api_base,
         "prediction_cache_file": prediction_cache_file
     }
     
@@ -374,7 +404,10 @@ def main() -> None:
         visualize=args.visualize,
         visualize_dir=visualize_dir,
         mode=args.mode,
-        predictions_dir=args.predictions_dir
+        predictions_dir=args.predictions_dir,
+        conf_threshold=args.conf_threshold,
+        api_base=args.api_base,
+        api_key=args.api_key
     )
     
     try:

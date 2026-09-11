@@ -174,3 +174,34 @@ def test_coco_101_interpolation() -> None:
     evaluator.update(pred, gt)
     report = evaluator.compute_metrics()
     assert report["per_iou"]["iou_0.50"]["mAP"] == 1.0
+
+def test_conf_threshold_filtering() -> None:
+    evaluator = DetectionEvaluator(iou_thresholds=[0.5], conf_threshold=0.5)
+    gt = [{"bbox": [0.0, 0.0, 0.5, 0.5], "label": "dog"}]
+    preds = [
+        {"bbox": [0.0, 0.0, 0.48, 0.48], "label": "dog", "score": 0.8}, # Kept (0.8 >= 0.5)
+        {"bbox": [0.6, 0.6, 0.9, 0.9], "label": "dog", "score": 0.3}    # Filtered out (0.3 < 0.5)
+    ]
+    evaluator.update(preds, gt)
+    assert len(evaluator.all_predictions) == 1
+    assert evaluator.all_predictions[0]["score"] == 0.8
+
+def test_evaluator_config_validation() -> None:
+    from evaluator.config import EvaluatorConfig
+    # Valid config
+    cfg = EvaluatorConfig(
+        model_name="test-model",
+        dataset_path="test-dataset",
+        conf_threshold=0.25,
+        api_base="http://localhost:8000/v1",
+        api_key="secret"
+    )
+    cfg.validate()
+    
+    # Invalid conf_threshold > 1.0
+    with pytest.raises(ValueError):
+        EvaluatorConfig(model_name="test-model", dataset_path="test-dataset", conf_threshold=1.5).validate()
+        
+    # Invalid conf_threshold < 0.0
+    with pytest.raises(ValueError):
+        EvaluatorConfig(model_name="test-model", dataset_path="test-dataset", conf_threshold=-0.1).validate()

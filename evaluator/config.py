@@ -17,6 +17,9 @@ class EvaluatorConfig:
     visualize_dir: str = "visualizations"
     mode: str = "all"
     predictions_dir: str = "predictions"
+    conf_threshold: float = 0.0
+    api_base: Optional[str] = None
+    api_key: Optional[str] = None
 
     def validate(self) -> None:
         valid_modes = ["all", "predict", "evaluate"]
@@ -33,3 +36,5 @@ class EvaluatorConfig:
         for th in self.iou_thresholds:
             if not (0.0 <= th <= 1.0):
                 raise ValueError(f"IoU threshold {th} must be between 0.0 and 1.0.")
+        if not (0.0 <= self.conf_threshold <= 1.0):
+            raise ValueError(f"conf_threshold must be between 0.0 and 1.0, got {self.conf_threshold}.")
