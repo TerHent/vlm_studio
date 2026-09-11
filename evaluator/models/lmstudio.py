@@ -6,6 +6,69 @@ from typing import Dict, List, Any, Tuple, Optional
 from PIL import Image
 from evaluator.models.base import BaseVLMAdapter
 
+def fetch_lmstudio_models(api_base: Optional[str] = None) -> Dict[str, Any]:
+    """Queries LM Studio to discover loaded models, VLMs, and all available models."""
+    import os
+    resolved_base = (
+        api_base or 
+        os.environ.get("LM_STUDIO_API_BASE") or 
+        os.environ.get("OPENAI_API_BASE") or 
+        "http://127.0.0.1:1234/v1"
+    ).rstrip("/")
+    root_base = resolved_base[:-3] if resolved_base.endswith("/v1") else resolved_base
+
+    loaded_models: List[str] = []
+    vlm_models: List[str] = []
+    all_models: List[str] = []
+
+    # 1. Query native api/v0/models (contains state: 'loaded' and type: 'vlm')
+    try:
+        r = requests.get(f"{root_base}/api/v0/models", timeout=2.0)
+        if r.status_code == 200:
+            for m in r.json().get("data", []):
+                m_id = m.get("id")
+                if not m_id:
+                    continue
+                all_models.append(m_id)
+                if m.get("type") == "vlm":
+                    vlm_models.append(m_id)
+                if m.get("state") == "loaded":
+                    loaded_models.append(m_id)
+    except Exception:
+        pass
+
+    # 2. Fallback to standard OpenAI /v1/models if needed
+    if not all_models:
+        try:
+            r = requests.get(f"{resolved_base}/models", timeout=2.0)
+            if r.status_code == 200:
+                for m in r.json().get("data", []):
+                    m_id = m.get("id")
+                    if m_id:
+                        all_models.append(m_id)
+        except Exception:
+            pass
+
+    # Select preferred active model: loaded VLM > loaded any > any VLM > first available
+    active_model: Optional[str] = None
+    loaded_vlms = [m for m in loaded_models if m in vlm_models]
+    if loaded_vlms:
+        active_model = loaded_vlms[0]
+    elif loaded_models:
+        active_model = loaded_models[0]
+    elif vlm_models:
+        active_model = vlm_models[0]
+    elif all_models:
+        active_model = all_models[0]
+
+    return {
+        "is_connected": len(all_models) > 0,
+        "active_model": active_model,
+        "loaded_models": loaded_models,
+        "vlm_models": vlm_models,
+        "all_models": all_models
+    }
+
 class LMStudioAdapter(BaseVLMAdapter):
     """Adapter for OpenAI-compatible local endpoints (e.g., LM Studio, vLLM, Ollama) hosting VLMs."""
     
@@ -17,17 +80,30 @@ class LMStudioAdapter(BaseVLMAdapter):
         api_base: Optional[str] = None,
         api_key: Optional[str] = None
     ) -> None:
-        super().__init__(model_name, device)
-        self.classes = classes or []
-        
         import os
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("LM_STUDIO_API_KEY")
         resolved_base = (
             api_base or 
             os.environ.get("LM_STUDIO_API_BASE") or 
             os.environ.get("OPENAI_API_BASE") or 
             "http://127.0.0.1:1234/v1"
         )
+
+        # Dynamic model detection: if model_name is "auto" or empty, resolve from LM Studio
+        if not model_name or model_name.lower() in ("auto", "default"):
+            models_info = fetch_lmstudio_models(resolved_base)
+            if models_info.get("active_model"):
+                model_name = models_info["active_model"]
+            elif models_info.get("all_models"):
+                model_name = models_info["all_models"][0]
+            else:
+                raise ValueError(
+                    f"Could not auto-detect active model from LM Studio at '{resolved_base}'. "
+                    "Please ensure LM Studio is running and a model is loaded, or specify model_name explicitly."
+                )
+
+        super().__init__(model_name, device)
+        self.classes = classes or []
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("LM_STUDIO_API_KEY")
         self.endpoint = f"{resolved_base.rstrip('/')}/chat/completions"
 
     def predict(self, image: Image.Image) -> List[Dict[str, Any]]:
@@ -65,7 +141,7 @@ class LMStudioAdapter(BaseVLMAdapter):
                 }
             ],
             "temperature": 0.0,
-            "max_tokens": 1024
+            "max_tokens": 2048
         }
         
         headers = {"Content-Type": "application/json"}
@@ -74,10 +150,14 @@ class LMStudioAdapter(BaseVLMAdapter):
         
         # 4. Query the API
         try:
-            response = requests.post(self.endpoint, json=payload, headers=headers, timeout=60)
+            response = requests.post(self.endpoint, json=payload, headers=headers, timeout=120)
             response.raise_for_status()
             res_data = response.json()
-            content = res_data["choices"][0]["message"]["content"]
+            choice_msg = res_data["choices"][0]["message"]
+            content = choice_msg.get("content") or ""
+            # Fallback for reasoning/thinking models (e.g. Gemma 4, DeepSeek R1) where output is in reasoning_content
+            if not content.strip() and choice_msg.get("reasoning_content"):
+                content = choice_msg["reasoning_content"]
             return self.parse_output(content, image.size)
         except Exception as e:
             raise RuntimeError(f"Failed to query LM Studio API at {self.endpoint}: {e}")

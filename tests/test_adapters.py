@@ -159,4 +159,45 @@ def test_lmstudio_adapter_api_config() -> None:
     assert adapter.endpoint == "http://localhost:8000/v1/chat/completions"
     assert adapter.api_key == "secret-key-123"
 
+def test_fetch_lmstudio_models(requests_mock) -> None:
+    from evaluator.models.lmstudio import fetch_lmstudio_models
+    
+    # Mock LM Studio native api/v0/models
+    requests_mock.get(
+        "http://mock-host:1234/api/v0/models",
+        json={
+            "data": [
+                {"id": "text-llm", "type": "llm", "state": "not-loaded"},
+                {"id": "vision-vlm", "type": "vlm", "state": "loaded"}
+            ]
+        }
+    )
+    
+    info = fetch_lmstudio_models("http://mock-host:1234/v1")
+    assert info["is_connected"] is True
+    assert info["active_model"] == "vision-vlm"
+    assert "vision-vlm" in info["loaded_models"]
+    assert "vision-vlm" in info["vlm_models"]
+    assert "text-llm" in info["all_models"]
+
+def test_lmstudio_auto_model_resolution(requests_mock) -> None:
+    from evaluator.models.lmstudio import LMStudioAdapter
+    
+    requests_mock.get(
+        "http://mock-host:1234/api/v0/models",
+        json={
+            "data": [
+                {"id": "my-active-vlm", "type": "vlm", "state": "loaded"}
+            ]
+        }
+    )
+    
+    adapter = LMStudioAdapter(
+        model_name="auto",
+        device="cpu",
+        api_base="http://mock-host:1234/v1"
+    )
+    assert adapter.model_name == "my-active-vlm"
+
+
 

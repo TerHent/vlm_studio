@@ -61,8 +61,8 @@ def parse_args() -> argparse.Namespace:
     model_group.add_argument(
         "--model", 
         type=str, 
-        required=True,
-        help="Hugging Face model ID or hosted model name (e.g., zai-org/glm-4.6v-flash or microsoft/Florence-2-base)"
+        default="auto",
+        help="Hugging Face model ID, hosted model name, or 'auto' to auto-detect model loaded in LM Studio (default: auto)"
     )
     model_group.add_argument(
         "--dataset", 
@@ -399,8 +399,19 @@ def main() -> None:
         print(f"Error parsing --iou-thresholds '{args.iou_thresholds}': {e}", file=sys.stderr)
         sys.exit(1)
 
+    model_name = args.model
+    if not model_name or model_name.lower() in ("auto", "default"):
+        from evaluator.models.lmstudio import fetch_lmstudio_models
+        info = fetch_lmstudio_models(args.api_base)
+        if info.get("active_model"):
+            model_name = info["active_model"]
+            print(f"Auto-detected active LM Studio model: '{model_name}'")
+        else:
+            model_name = "zai-org/glm-4.6v-flash"
+            print(f"Could not auto-detect active model, using default: '{model_name}'")
+
     dataset_folder = os.path.basename(args.dataset.rstrip("/"))
-    model_folder_name = args.model.replace("/", "_").replace(" ", "_")
+    model_folder_name = model_name.replace("/", "_").replace(" ", "_")
 
     visualize_dir = args.visualize_dir
     if args.visualize:
@@ -411,7 +422,7 @@ def main() -> None:
         output_report_path = os.path.join("results", f"{dataset_folder}_{model_folder_name}.json")
 
     config = EvaluatorConfig(
-        model_name=args.model,
+        model_name=model_name,
         dataset_path=args.dataset,
         dataset_split=args.split,
         label_map=label_map,
