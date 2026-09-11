@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
 2. Run Model Inference Only (Saves prediction cache to predictions/ folder):
    python3 main.py --model zai-org/glm-4.6v-flash --dataset datasets/Barista_workflow_small --split all --mode predict
 
-3. Offline Evaluation & Visualization (Instant execution using cached predictions):
+3. Offline Evaluation & Image Export (Instant execution using cached predictions):
    python3 main.py --model zai-org/glm-4.6v-flash --dataset datasets/Barista_workflow_small --split all --mode evaluate --visualize
 """
     )
@@ -38,9 +38,9 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help=(
             "Execution mode:\n"
-            "  all      : Runs inference, saves predictions cache, computes metrics, and visualizes (default)\n"
+            "  all      : Runs inference, saves predictions cache, computes metrics, and saves comparison images (default)\n"
             "  predict  : Runs VLM inference and saves raw predictions to predictions/ cache JSON\n"
-            "  evaluate : Reads pre-saved predictions cache JSON and runs offline evaluation & visualization"
+            "  evaluate : Reads pre-saved predictions cache JSON, computes metrics, and saves comparison images"
         )
     )
     mode_group.add_argument(
@@ -136,19 +136,19 @@ def parse_args() -> argparse.Namespace:
         help="Path where final evaluation JSON report is saved (default: results/[dataset]_[model].json)"
     )
 
-    # Visualization Options
-    vis_group = parser.add_argument_group("Visualization Options")
+    # Side-by-Side Comparison Image Export Options
+    vis_group = parser.add_argument_group("Side-by-Side Comparison Image Export Options")
     vis_group.add_argument(
         "--visualize", 
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Enable/disable side-by-side ground truth vs predictions image saving (default: enabled)"
+        help="Enable/disable saving side-by-side ground truth vs prediction comparison image files to disk (default: enabled)"
     )
     vis_group.add_argument(
         "--visualize-dir", 
         type=str, 
         default="visualizations",
-        help="Directory to save comparison images (default: visualizations)"
+        help="Directory to save comparison image files (default: visualizations)"
     )
     
     return parser.parse_args()

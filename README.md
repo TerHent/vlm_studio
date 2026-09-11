@@ -2,22 +2,23 @@
 
 **VLM Studio** is a modular evaluation framework designed for benchmarking Vision-Language Models (VLMs) on object detection tasks. 
 
-It provides an end-to-end evaluation pipeline that supports local models (via LM Studio, Florence-2, PaliGemma, Qwen, GLM-4V), structured dataset loading, offline prediction caching, static label aliasing, mathematically verified mAP metrics, and dual-panel visual comparisons.
+It provides an end-to-end evaluation pipeline that supports local models (via LM Studio, Florence-2, PaliGemma, Qwen, GLM-4V), structured dataset loading, offline prediction caching, static label aliasing, mathematically verified mAP metrics, and side-by-side ground truth vs prediction image exports.
 
 ---
 
 ## 🌟 Key Features
 
 * **Modular 3-Mode Execution Architecture (`--mode`):**
-  * `all`: Runs VLM inference $\rightarrow$ caches raw predictions $\rightarrow$ calculates metrics $\rightarrow$ renders visualizations.
+  * `all`: Runs VLM inference $\rightarrow$ caches raw predictions $\rightarrow$ calculates metrics $\rightarrow$ saves comparison images to disk.
   * `predict`: Runs VLM inference and saves raw predictions to `predictions/` (ideal for long/overnight runs).
-  * `evaluate`: Loads cached predictions and evaluates metrics & visualizations **instantly offline (under 1 sec)** without touching GPU/LLM resources.
+  * `evaluate`: Loads cached predictions and evaluates metrics & saves comparison images **instantly offline (under 1 sec)** without touching GPU/LLM resources.
 * **Defensive Output Parsing & Recovery:**
   * Handles JSON syntax quirks, `bbox_2d` key shifts, duplicate closing brackets (`]]`), trailing commas, single quotes, and truncated tokens.
 * **Flexible Endpoints & Authentication (`--api-base`, `--api-key`):**
   * Connect directly to LM Studio, vLLM, Ollama, or remote OpenAI-compatible endpoints with custom URLs and authorization headers.
-* **Side-by-Side Dual-Panel Visualizer:**
-  * Renders composite comparison JPEGs displaying **Ground Truth (Left)** vs. **Model Predictions (Right)** with stable category colors, adaptive resolution-scaled fonts, and top-edge clipping protection.
+* **Side-by-Side Comparison Image Export (`--visualize`):**
+  * Headless and non-interactive: generates and saves composite image files directly to the `visualizations/` folder on disk (no GUI or on-screen display).
+  * Draws **Ground Truth (Left Panel)** vs. **Model Predictions (Right Panel)** with stable category colors, adaptive resolution-scaled fonts, and top-edge clipping protection for offline review in an external viewer.
 * **Label Mapping & Confidence Filtering (`--label-map`, `--conf-threshold`):**
   * Map model synonym outputs to dataset taxonomy and filter out low-confidence predictions.
 * **Standard COCO Benchmark Evaluation by Default (`--iou-thresholds`):**
@@ -73,8 +74,8 @@ python3 main.py \
   --mode predict
 ```
 
-### Offline Evaluation & Visualization (`--mode evaluate`)
-Reads pre-saved predictions from `predictions/` and computes metrics & visualizations in **under 1 second**:
+### Offline Evaluation & Image Export (`--mode evaluate`)
+Reads pre-saved predictions from `predictions/`, computes metrics, and exports comparison images in **under 1 second**:
 ```bash
 python3 main.py \
   --model zai-org/glm-4.6v-flash \
@@ -110,7 +111,7 @@ pytest
 
 * `predictions/`: Contains raw JSON prediction caches (`predictions/[dataset]_[model].json`).
 * `results/`: Contains detailed summary metrics JSON reports (`results/[dataset]_[model].json`).
-* `visualizations/`: Contains dual-panel comparison JPEGs (`visualizations/[dataset]_[model]/`).
+* `visualizations/`: Contains saved side-by-side comparison image files (`visualizations/[dataset]_[model]/`).
 
 ---
 
