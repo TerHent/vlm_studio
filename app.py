@@ -131,7 +131,7 @@ if sidebar_mode == "📊 Evaluation Reports & Metrics":
                         "Dataset": meta.get("dataset_path", "N/A"),
                         "Split": meta.get("dataset_split", "all"),
                         "Images": data.get("image_count", 0),
-                        "mAP@[.50:.95]": f"{data.get('mAP_50_95', 0.0):.4f}",
+                        "mAP [0.50-0.95]": f"{data.get('mAP_50_95', 0.0):.4f}",
                         "mAP@.50 (AP50)": f"{data.get('mAP_50', 0.0):.4f}",
                         "mAP@.75 (AP75)": f"{data.get('mAP_75', 0.0):.4f}",
                         "GT Boxes": data.get("total_ground_truths", 0),
@@ -194,7 +194,7 @@ if sidebar_mode == "📊 Evaluation Reports & Metrics":
                 for cls_name, vals in summary_data.items():
                     rows.append({
                         "Category": cls_name,
-                        "mAP@[.50:.95]": round(vals.get("AP_50_95", 0.0), 4),
+                        "mAP [0.50-0.95]": round(vals.get("AP_50_95", 0.0), 4),
                         "AP@.50": round(vals.get("AP_50", 0.0), 4),
                         "AP@.75": round(vals.get("AP_75", 0.0), 4),
                         "Precision@.50": round(vals.get("precision_50", 0.0), 4),
@@ -202,13 +202,13 @@ if sidebar_mode == "📊 Evaluation Reports & Metrics":
                         "Ground Truth": vals.get("num_ground_truth", 0),
                         "Predictions": vals.get("num_predictions", 0),
                     })
-                df_cats = pd.DataFrame(rows).sort_values("mAP@[.50:.95]", ascending=False)
+                df_cats = pd.DataFrame(rows).sort_values("mAP [0.50-0.95]", ascending=False)
                 
                 # Render chart and table
                 col_chart, col_table = st.columns([1, 1])
                 with col_chart:
-                    st.markdown("**mAP@[.50:.95] by Category:**")
-                    st.bar_chart(df_cats.set_index("Category")["mAP@[.50:.95]"])
+                    st.markdown("**mAP [0.50-0.95] by Category:**")
+                    st.bar_chart(df_cats.set_index("Category")["mAP [0.50-0.95]"])
                 with col_table:
                     st.markdown("**Detailed Class Table:**")
                     st.dataframe(df_cats, use_container_width=True, hide_index=True)
