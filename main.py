@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from evaluator.config import EvaluatorConfig
 from evaluator.dataset import DatasetLoader
-from evaluator.metrics import DetectionEvaluator
+from evaluator.metrics import DetectionEvaluator, parse_iou_thresholds
 from evaluator.models import get_model_adapter
 from evaluator.visualizer import create_side_by_side, save_visualization
 from evaluator.predictions import save_prediction_cache, load_prediction_cache
@@ -18,14 +18,14 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="""Examples of usage:
 
-1. End-to-end Inference & Evaluation (Default Mode):
+1. End-to-end Inference & Evaluation (Default Mode with standard COCO mAP@[.50:.95]):
    python3 main.py --model zai-org/glm-4.6v-flash --dataset datasets/Barista_workflow_small --split all --visualize
 
 2. Run Model Inference Only (Saves prediction cache to predictions/ folder):
    python3 main.py --model zai-org/glm-4.6v-flash --dataset datasets/Barista_workflow_small --split all --mode predict
 
 3. Offline Evaluation & Visualization (Instant execution using cached predictions):
-   python3 main.py --model zai-org/glm-4.6v-flash --dataset datasets/Barista_workflow_small --split all --mode evaluate --iou-thresholds "0.3,0.5" --visualize
+   python3 main.py --model zai-org/glm-4.6v-flash --dataset datasets/Barista_workflow_small --split all --mode evaluate --visualize
 """
     )
     
@@ -94,8 +94,13 @@ def parse_args() -> argparse.Namespace:
     eval_group.add_argument(
         "--iou-thresholds", 
         type=str, 
-        default="0.5",
-        help="Comma-separated list of IoU thresholds for evaluation (e.g., '0.3,0.5,0.75') (default: 0.5)"
+        default="coco",
+        help=(
+            "IoU thresholds for evaluation (default: 'coco'):\n"
+            "  'coco'           : Standard 10-step COCO thresholds [0.50:0.95:0.05]\n"
+            "  '0.5:0.95:0.05'  : Range syntax (start:stop:step)\n"
+            "  '0.5' or '0.3,0.5': Explicit threshold value(s)"
+        )
     )
     eval_group.add_argument(
         "--output", 
@@ -288,24 +293,52 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
 
 def print_summary(report: Dict[str, Any]) -> None:
     """Renders formatted evaluation summary metrics to stdout."""
-    print("\n" + "=" * 64)
-    print(" EVALUATION SUMMARY REPORT")
-    print("=" * 64)
+    print("\n" + "=" * 76)
+    print(" EVALUATION SUMMARY REPORT (COCO Object Detection Benchmark)")
+    print("=" * 76)
     print(f"Total Evaluated Images:    {report['image_count']}")
     print(f"Total Ground Truth Bboxes: {report['total_ground_truths']}")
     print(f"Total Model Predictions:   {report['total_predictions']}")
-    print(f"mAP@[.50:.95]:            {report['mAP_50_95']:.4f}")
+    print("-" * 76)
+    
+    is_coco = report.get("is_coco_standard", False)
+    if is_coco:
+        print(f"mAP@[.50:.95] (COCO AP):   {report['mAP_50_95']:.4f}")
+    else:
+        print(f"Mean mAP (Evaluated IoUs): {report.get('mAP_mean', report.get('mAP_50_95', 0.0)):.4f}")
+        
     if "iou_0.50" in report["per_iou"]:
-        print(f"mAP@.50:                   {report['mAP_50']:.4f}")
+        print(f"mAP@.50       (AP50):      {report['mAP_50']:.4f}")
         print(f"Mean Precision@.50:        {report['per_iou']['iou_0.50']['mean_precision']:.4f}")
         print(f"Mean Recall@.50:           {report['per_iou']['iou_0.50']['mean_recall']:.4f}")
+    if "iou_0.75" in report["per_iou"]:
+        print(f"mAP@.75       (AP75):      {report['mAP_75']:.4f}")
+        print(f"Mean Precision@.75:        {report['per_iou']['iou_0.75']['mean_precision']:.4f}")
+        print(f"Mean Recall@.75:           {report['per_iou']['iou_0.75']['mean_recall']:.4f}")
         
-    print("\nPer-Category Average Precision (AP) at IoU=0.50:")
-    if "iou_0.50" in report["per_iou"]:
+    print("\n" + "-" * 76)
+    col_ap = "mAP@[.50:.95]" if is_coco else "Mean AP"
+    print(f"{'Category':<20} {col_ap:>13} {'AP@.50':>8} {'AP@.75':>8} {'Prec@.50':>9} {'Rec@.50':>8} {'GT':>5} {'Pred':>6}")
+    print("-" * 76)
+    
+    summary_data = report.get("per_class_summary")
+    if summary_data:
+        for cls, vals in summary_data.items():
+            print(
+                f"{cls:<20} "
+                f"{vals['AP_50_95']:>13.4f} "
+                f"{vals['AP_50']:>8.4f} "
+                f"{vals['AP_75']:>8.4f} "
+                f"{vals['precision_50']:>9.4f} "
+                f"{vals['recall_50']:>8.4f} "
+                f"{vals['num_ground_truth']:>5} "
+                f"{vals['num_predictions']:>6}"
+            )
+    elif "iou_0.50" in report["per_iou"]:
         class_metrics = report["per_iou"]["iou_0.50"]["class_metrics"]
         for cls, vals in class_metrics.items():
-            print(f"  - {cls:<16} AP: {vals['AP']:.4f} | Prec: {vals['precision']:.4f} | Rec: {vals['recall']:.4f} (GT: {vals['num_ground_truth']}, Pred: {vals['num_predictions']})")
-    print("=" * 64)
+            print(f"{cls:<20} {'N/A':>13} {vals['AP']:>8.4f} {'N/A':>8} {vals['precision']:>9.4f} {vals['recall']:>8.4f} {vals['num_ground_truth']:>5} {vals['num_predictions']:>6}")
+    print("=" * 76)
 
 def main() -> None:
     args = parse_args()
@@ -313,9 +346,9 @@ def main() -> None:
     label_map = load_label_map(args.label_map)
     
     try:
-        iou_thresholds = [float(x.strip()) for x in args.iou_thresholds.split(",")]
-    except ValueError:
-        print("IoU thresholds must be comma-separated float values (e.g. '0.5,0.75').", file=sys.stderr)
+        iou_thresholds = parse_iou_thresholds(args.iou_thresholds)
+    except Exception as e:
+        print(f"Error parsing --iou-thresholds '{args.iou_thresholds}': {e}", file=sys.stderr)
         sys.exit(1)
 
     dataset_folder = os.path.basename(args.dataset.rstrip("/"))

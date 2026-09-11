@@ -1,5 +1,11 @@
+import pytest
 import numpy as np
-from evaluator.metrics import compute_iou, DetectionEvaluator
+from evaluator.metrics import (
+    compute_iou, 
+    DetectionEvaluator, 
+    COCO_IOU_THRESHOLDS, 
+    parse_iou_thresholds
+)
 
 def test_iou_computation() -> None:
     # Test perfect match
@@ -97,3 +103,74 @@ def test_ap_calculation() -> None:
     assert abs(dog_metrics["AP"] - 0.5) < 1e-6
     assert abs(dog_metrics["precision"] - 0.5) < 1e-6
     assert abs(dog_metrics["recall"] - 0.5) < 1e-6
+
+def test_parse_iou_thresholds() -> None:
+    # None / "coco" / "default"
+    assert parse_iou_thresholds(None) == COCO_IOU_THRESHOLDS
+    assert parse_iou_thresholds("coco") == COCO_IOU_THRESHOLDS
+    assert parse_iou_thresholds("COCO") == COCO_IOU_THRESHOLDS
+    assert parse_iou_thresholds("default") == COCO_IOU_THRESHOLDS
+
+    # Range syntax
+    range_10 = parse_iou_thresholds("0.5:0.95:0.05")
+    assert range_10 == COCO_IOU_THRESHOLDS
+    assert parse_iou_thresholds("0.5:0.95") == COCO_IOU_THRESHOLDS
+    assert parse_iou_thresholds("0.5:0.7:0.1") == [0.5, 0.6, 0.7]
+
+    # Comma-separated list
+    assert parse_iou_thresholds("0.3, 0.5") == [0.3, 0.5]
+    assert parse_iou_thresholds("0.5") == [0.5]
+
+    # List of floats
+    assert parse_iou_thresholds([0.5, 0.75]) == [0.5, 0.75]
+
+    # Error conditions
+    with pytest.raises(ValueError):
+        parse_iou_thresholds("")
+    with pytest.raises(ValueError):
+        parse_iou_thresholds("1.5")  # > 1.0
+    with pytest.raises(ValueError):
+        parse_iou_thresholds("-0.1") # < 0.0
+    with pytest.raises(ValueError):
+        parse_iou_thresholds("0.5:0.9:0.0") # step <= 0
+    with pytest.raises(ValueError):
+        parse_iou_thresholds("0.5:0.7:0.1:0.2") # too many colons
+
+def test_default_coco_evaluator() -> None:
+    evaluator = DetectionEvaluator()
+    assert len(evaluator.iou_thresholds) == 10
+    assert evaluator.iou_thresholds == COCO_IOU_THRESHOLDS
+    assert 0.5 in evaluator.iou_thresholds
+    assert 0.75 in evaluator.iou_thresholds
+
+def test_coco_map_metrics() -> None:
+    # Evaluator with default COCO thresholds
+    evaluator = DetectionEvaluator()
+    
+    # 2 images with perfect boxes and slight offset boxes
+    gt_0 = [{"bbox": [0.1, 0.1, 0.5, 0.5], "label": "cup"}]
+    pred_0 = [{"bbox": [0.1, 0.1, 0.52, 0.52], "label": "cup", "score": 0.9}]
+    evaluator.update(pred_0, gt_0)
+
+    report = evaluator.compute_metrics()
+    assert report["is_coco_standard"] is True
+    assert "iou_0.50" in report["per_iou"]
+    assert "iou_0.75" in report["per_iou"]
+    assert "iou_0.95" in report["per_iou"]
+    assert report["mAP_50"] == 1.0
+    assert report["mAP_75"] == 1.0
+    assert report["mAP_50_95"] > 0.0
+    assert "cup" in report["per_class_summary"]
+    cup_summary = report["per_class_summary"]["cup"]
+    assert cup_summary["AP_50"] == 1.0
+    assert cup_summary["AP_75"] == 1.0
+    assert cup_summary["num_ground_truth"] == 1
+    assert cup_summary["num_predictions"] == 1
+
+def test_coco_101_interpolation() -> None:
+    evaluator = DetectionEvaluator(iou_thresholds=[0.5], ap_method="coco_101")
+    gt = [{"bbox": [0.0, 0.0, 0.5, 0.5], "label": "dog"}]
+    pred = [{"bbox": [0.0, 0.0, 0.48, 0.48], "label": "dog", "score": 0.9}]
+    evaluator.update(pred, gt)
+    report = evaluator.compute_metrics()
+    assert report["per_iou"]["iou_0.50"]["mAP"] == 1.0

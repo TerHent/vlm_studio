@@ -18,8 +18,9 @@ It provides an end-to-end evaluation pipeline that supports local models (via LM
   * Renders composite comparison JPEGs displaying **Ground Truth (Left)** vs. **Model Predictions (Right)** with stable category colors and panel headers.
 * **Label Mapping & Synonym Aliasing (`--label-map`):**
   * Map model synonym outputs (e.g. `"Milk Container": "Milk Pitcher"`) to dataset taxonomy without modifying ground truth files.
-* **Flexible IoU Thresholding (`--iou-thresholds`):**
-  * Evaluate models at custom overlap thresholds (e.g. `0.30` for noisy/POV video datasets or `0.50` for standard benchmarks).
+* **Standard COCO Benchmark Evaluation by Default (`--iou-thresholds`):**
+  * Evaluates models by default across standard 10-step COCO IoU thresholds (`[0.50:0.95:0.05]`), reporting primary **COCO mAP@[.50:.95]**, **mAP@.50 (AP50)**, **mAP@.75 (AP75)**, and per-category AP breakdowns.
+  * Supports `'coco'` (default), range syntax (e.g., `'0.5:0.95:0.05'`), or custom thresholds (e.g. `'0.3,0.5'`).
 * **Fully Tested:** 
   * Comprehensive test suite using `pytest` verifying metrics calculations, adapter parsing, image visualizer math, and prediction cache I/O.
 

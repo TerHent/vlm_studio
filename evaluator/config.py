@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from evaluator.metrics import COCO_IOU_THRESHOLDS
 
 @dataclass(frozen=True)
 class EvaluatorConfig:
@@ -8,7 +9,7 @@ class EvaluatorConfig:
     dataset_path: str
     dataset_split: str = "validation"
     label_map: Dict[str, str] = field(default_factory=dict)
-    iou_thresholds: List[float] = field(default_factory=lambda: [0.5])
+    iou_thresholds: List[float] = field(default_factory=lambda: list(COCO_IOU_THRESHOLDS))
     output_report_path: str = "evaluation_report.json"
     device: str = "auto"
     max_samples: Optional[int] = None
