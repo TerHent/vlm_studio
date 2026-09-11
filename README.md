@@ -1,3 +1,15 @@
+---
+title: VLM Studio
+emoji: 👁️
+colorFrom: blue
+colorTo: indigo
+sdk: streamlit
+sdk_version: 1.59.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # VLM Studio: Local Vision-Language Model Object Detection Evaluator
 
 [![Tests](https://github.com/TerHent/vlm_studio/actions/workflows/test.yml/badge.svg)](https://github.com/TerHent/vlm_studio/actions/workflows/test.yml)
@@ -47,7 +59,13 @@ cd vlm_studio
 pip install -r requirements.txt
 ```
 
-### 2. View CLI Help Documentation
+### 2. Launch Interactive Web Dashboard
+Run the web dashboard locally in your browser:
+```bash
+streamlit run app.py
+```
+
+### 3. View CLI Help Documentation
 ```bash
 python3 main.py --help
 ```
