@@ -130,6 +130,17 @@ def parse_args() -> argparse.Namespace:
         )
     )
     eval_group.add_argument(
+        "--ap-method",
+        type=str,
+        choices=["all_points", "coco_101"],
+        default="all_points",
+        help=(
+            "Average Precision calculation algorithm (default: 'all_points'):\n"
+            "  'all_points' : Continuous area under PR envelope curve (PASCAL VOC 2012+)\n"
+            "  'coco_101'   : Standard 101-point recall interpolation [0.0:0.01:1.0] (COCO standard)"
+        )
+    )
+    eval_group.add_argument(
         "--output", 
         type=str, 
         default="evaluation_report.json",
@@ -279,6 +290,7 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
     evaluator = DetectionEvaluator(
         label_map=config.label_map, 
         iou_thresholds=config.iou_thresholds,
+        ap_method=config.ap_method,
         conf_threshold=config.conf_threshold
     )
 
@@ -332,6 +344,7 @@ def run_evaluation(config: EvaluatorConfig) -> Optional[Dict[str, Any]]:
         "label_map": config.label_map,
         "conf_threshold": config.conf_threshold,
         "iou_thresholds": config.iou_thresholds,
+        "ap_method": config.ap_method,
         "max_samples": config.max_samples,
         "api_base": config.api_base,
         "prediction_cache_file": prediction_cache_file
@@ -435,6 +448,7 @@ def main() -> None:
         mode=args.mode,
         predictions_dir=args.predictions_dir,
         conf_threshold=args.conf_threshold,
+        ap_method=args.ap_method,
         api_base=args.api_base,
         api_key=args.api_key,
         images_dir=args.images_dir

@@ -205,3 +205,12 @@ def test_evaluator_config_validation() -> None:
     # Invalid conf_threshold < 0.0
     with pytest.raises(ValueError):
         EvaluatorConfig(model_name="test-model", dataset_path="test-dataset", conf_threshold=-0.1).validate()
+
+    # Invalid ap_method
+    with pytest.raises(ValueError):
+        EvaluatorConfig(model_name="test-model", dataset_path="test-dataset", ap_method="invalid_method").validate()
+
+    # Valid ap_methods
+    EvaluatorConfig(model_name="test-model", dataset_path="test-dataset", ap_method="all_points").validate()
+    EvaluatorConfig(model_name="test-model", dataset_path="test-dataset", ap_method="coco_101").validate()
+

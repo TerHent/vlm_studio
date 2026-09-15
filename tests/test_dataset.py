@@ -198,3 +198,37 @@ def test_coco_dataset_loader_directory_and_images_dir(tmp_path) -> None:
     assert abs(xmin - (50.0 / 800.0)) < 1e-5
     assert abs(ymax - (360.0 / 600.0)) < 1e-5
     assert abs(xmax - (450.0 / 800.0)) < 1e-5
+
+def test_is_coco_json_file_large(tmp_path) -> None:
+    from evaluator.dataset import is_coco_json_file
+    
+    # Simulate large COCO instances file where images array starts early but annotations/categories are far down
+    large_coco = tmp_path / "instances_train2017.json"
+    with open(large_coco, "w") as f:
+        f.write('{"info": {"description": "COCO"}, "images": [{"id": 1, "file_name": "0.jpg"}], ')
+        # Fill padding > 10KB
+        f.write('"dummy": "' + "x" * 15000 + '", ')
+        f.write('"annotations": []}')
+        
+    assert is_coco_json_file(str(large_coco)) is True
+
+def test_normalize_box_formats() -> None:
+    loader = DatasetLoader.__new__(DatasetLoader)
+    
+    # 1. Standard COCO normalized: [xmin=0.1, ymin=0.2, w=0.3, h=0.4]
+    # Expected [ymin, xmin, ymax, xmax]: [0.2, 0.1, 0.6, 0.4]
+    box_coco_norm = [0.1, 0.2, 0.3, 0.4]
+    norm_coco = loader._normalize_box(box_coco_norm, 1000, 1000)
+    assert abs(norm_coco[0] - 0.2) < 1e-5
+    assert abs(norm_coco[1] - 0.1) < 1e-5
+    assert abs(norm_coco[2] - 0.6) < 1e-5
+    assert abs(norm_coco[3] - 0.4) < 1e-5
+    
+    # 2. VOC normalized: [xmin=0.6, ymin=0.5, xmax=0.9, ymax=0.8] (where xmin + xmax > 1.0)
+    box_voc_norm = [0.6, 0.5, 0.9, 0.8]
+    norm_voc = loader._normalize_box(box_voc_norm, 1000, 1000)
+    assert abs(norm_voc[0] - 0.5) < 1e-5
+    assert abs(norm_voc[1] - 0.6) < 1e-5
+    assert abs(norm_voc[2] - 0.8) < 1e-5
+    assert abs(norm_voc[3] - 0.9) < 1e-5
+

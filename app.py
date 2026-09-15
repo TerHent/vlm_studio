@@ -416,7 +416,7 @@ tab_leaderboard, tab_inspector, tab_runner, tab_docs = st.tabs([
 # ==============================================================================
 with tab_leaderboard:
     if not available_reports:
-        st.info("No evaluation reports found in . Execute an evaluation via the **Run Evaluation** tab or CLI.")
+        st.info("No evaluation reports found in results/. Execute an evaluation via the **Run Evaluation** tab or CLI.")
     else:
         # Leaderboard Table with Search Filter
         sec_col, filter_col = st.columns([2, 1])
@@ -647,7 +647,7 @@ with tab_leaderboard:
 # ==============================================================================
 with tab_inspector:
     if not available_caches:
-        st.warning("No prediction caches found in . Run an evaluation first to populate predictions.")
+        st.warning("No prediction caches found in predictions/. Run an evaluation first to populate predictions.")
     else:
         # Top Controls Row
         c_cache, c_layout = st.columns([2, 2])
@@ -669,8 +669,13 @@ with tab_inspector:
             available_ds = get_available_datasets()
             fallback_ds = available_ds[0] if available_ds else ""
             dataset_path = cache_meta.get("dataset_path")
-            if not dataset_path or not os.path.exists(os.path.join(repo_root, dataset_path)):
+            if not dataset_path:
                 dataset_path = fallback_ds
+            elif not os.path.exists(dataset_path) and not os.path.exists(os.path.join(repo_root, dataset_path)):
+                local_in_ds = os.path.join(repo_root, "datasets", os.path.basename(dataset_path))
+                if os.path.exists(local_in_ds):
+                    dataset_path = local_in_ds
+                # Otherwise keep dataset_path as-is so DatasetLoader can load from Hugging Face Hub if applicable
             dataset_split = cache_meta.get("dataset_split", "all")
 
             # Session State for Indexing
@@ -782,7 +787,7 @@ with tab_inspector:
                 if active_gts:
                     gt_rows = [{
                         "Class": g["label"],
-                        "Bounding Box [xmin, ymin, xmax, ymax]": f"[{b[0]:.3f}, {b[1]:.3f}, {b[2]:.3f}, {b[3]:.3f}]"
+                        "Bounding Box [xmin, ymin, xmax, ymax]": f"[{b[1]:.3f}, {b[0]:.3f}, {b[3]:.3f}, {b[2]:.3f}]"
                     } for g in active_gts for b in [g["bbox"]]]
                     st.dataframe(pd.DataFrame(gt_rows), hide_index=True, use_container_width=True)
                 else:
@@ -794,7 +799,7 @@ with tab_inspector:
                     pred_rows = [{
                         "Class": p["label"],
                         "Confidence": round(float(p.get("score", 1.0)), 4),
-                        "Bounding Box [xmin, ymin, xmax, ymax]": f"[{b[0]:.3f}, {b[1]:.3f}, {b[2]:.3f}, {b[3]:.3f}]"
+                        "Bounding Box [xmin, ymin, xmax, ymax]": f"[{b[1]:.3f}, {b[0]:.3f}, {b[3]:.3f}, {b[2]:.3f}]"
                     } for p in active_preds for b in [p["bbox"]]]
                     st.dataframe(
                         pd.DataFrame(pred_rows),
@@ -994,6 +999,26 @@ with tab_runner:
         with col_opts3:
             enable_vis = st.checkbox("Export Side-by-Side Images to Disk", value=True)
 
+        col_adv1, col_adv2, col_adv3 = st.columns([2, 1, 1])
+        with col_adv1:
+            label_map_input = st.text_input(
+                "Label Aliases (JSON)",
+                value="{}",
+                help="Optional JSON dict mapping model outputs to ground truth taxonomy, e.g. {'Milk Container': 'Milk Pitcher'}"
+            )
+        with col_adv2:
+            iou_thresholds_input = st.text_input(
+                "IoU Thresholds",
+                value="coco",
+                help="Thresholds: 'coco' (0.50:0.95:0.05), '0.5', '0.3,0.5', or '0.5:0.95:0.05'"
+            )
+        with col_adv3:
+            ap_method_input = st.selectbox(
+                "AP Calculation Method",
+                options=["all_points", "coco_101"],
+                help="'all_points' (VOC style continuous AUC) or 'coco_101' (101-point COCO ladder)"
+            )
+
         submitted = st.form_submit_button("Start Evaluation Run ↵", width="stretch")
 
     if submitted:
@@ -1002,6 +1027,23 @@ with tab_runner:
             st.stop()
         if not dataset_path.strip():
             st.error("Please specify a Dataset Path.")
+            st.stop()
+
+        parsed_label_map = {}
+        if label_map_input.strip() and label_map_input.strip() != "{}":
+            try:
+                parsed_label_map = json.loads(label_map_input)
+                if not isinstance(parsed_label_map, dict):
+                    st.error("Label Map must be a valid JSON dictionary.")
+                    st.stop()
+            except json.JSONDecodeError as err:
+                st.error(f"Invalid JSON in Label Map: {err}")
+                st.stop()
+
+        try:
+            parsed_iou_thresholds = parse_iou_thresholds(iou_thresholds_input)
+        except Exception as err:
+            st.error(f"Invalid IoU Thresholds: {err}")
             st.stop()
 
         max_samples = int(max_samples_input) if max_samples_input > 0 else None
@@ -1015,6 +1057,8 @@ with tab_runner:
             model_name=model_name,
             dataset_path=dataset_path,
             dataset_split=dataset_split,
+            label_map=parsed_label_map,
+            iou_thresholds=parsed_iou_thresholds,
             output_report_path=output_report_path,
             device=device,
             max_samples=max_samples,
@@ -1022,6 +1066,7 @@ with tab_runner:
             visualize_dir=visualize_dir,
             mode=exec_mode,
             conf_threshold=conf_threshold_input,
+            ap_method=ap_method_input,
             api_base=api_base if api_base.strip() else None,
             api_key=api_key if api_key.strip() else None,
             images_dir=images_dir.strip() if images_dir.strip() else None

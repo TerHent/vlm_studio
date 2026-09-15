@@ -65,11 +65,13 @@ def draw_boxes(
         x1 = int(xmax * w)
         y1 = int(ymax * h)
         
-        # Clamp to image size
+        # Clamp to image size and ensure valid coordinate order
         x0 = max(0, min(w - 1, x0))
         y0 = max(0, min(h - 1, y0))
         x1 = max(0, min(w - 1, x1))
         y1 = max(0, min(h - 1, y1))
+        x0, x1 = min(x0, x1), max(x0, x1)
+        y0, y1 = min(y0, y1), max(y0, y1)
         
         # Get stable color for this class
         color = get_class_color(label)

@@ -18,6 +18,7 @@ class EvaluatorConfig:
     mode: str = "all"
     predictions_dir: str = "predictions"
     conf_threshold: float = 0.0
+    ap_method: str = "all_points"
     api_base: Optional[str] = None
     api_key: Optional[str] = None
     images_dir: Optional[str] = None
@@ -39,3 +40,6 @@ class EvaluatorConfig:
                 raise ValueError(f"IoU threshold {th} must be between 0.0 and 1.0.")
         if not (0.0 <= self.conf_threshold <= 1.0):
             raise ValueError(f"conf_threshold must be between 0.0 and 1.0, got {self.conf_threshold}.")
+        valid_ap_methods = ["all_points", "coco_101"]
+        if self.ap_method not in valid_ap_methods:
+            raise ValueError(f"Invalid ap_method '{self.ap_method}'. Must be one of {valid_ap_methods}.")

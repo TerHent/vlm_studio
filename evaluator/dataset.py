@@ -11,8 +11,11 @@ def is_coco_json_file(filepath: str) -> bool:
         return False
     try:
         with open(filepath, "r") as f:
-            chunk = f.read(8192)
-            if '"images"' in chunk and ('"annotations"' in chunk or '"categories"' in chunk):
+            chunk = f.read(65536)
+            if '"images"' in chunk and any(k in chunk for k in ('"annotations"', '"categories"', '"licenses"', '"info"')):
+                return True
+            fname_lower = os.path.basename(filepath).lower()
+            if '"images"' in chunk and any(kw in fname_lower for kw in ("instances", "coco", "annotation")):
                 return True
         if os.path.getsize(filepath) < 50 * 1024 * 1024:
             with open(filepath, "r") as f:
@@ -285,36 +288,41 @@ class DatasetLoader:
 
     def _normalize_box(self, box: List[float], img_width: int, img_height: int) -> List[float]:
         """Converts box [xmin, ymin, w, h] or similar to normalized [ymin, xmin, ymax, xmax] range [0.0, 1.0]."""
-        # We assume standard COCO format: [xmin, ymin, width, height]
-        # Check if coordinates are already normalized
+        # Check if coordinates are already normalized [0.0, 1.0]
         is_normalized = all(0.0 <= c <= 1.0001 for c in box)
         
         if is_normalized:
-            # Let's check format: VOC [xmin, ymin, xmax, ymax] or COCO [xmin, ymin, width, height]
             x0, y0, c2, c3 = box
-            if c2 >= x0 and c3 >= y0:
-                # voc: [xmin, ymin, xmax, ymax]
+            # If (x0 + c2 > 1.0001) or (y0 + c3 > 1.0001), c2 and c3 cannot be width/height; they must be xmax/ymax (VOC)
+            if (x0 + c2 > 1.0001) or (y0 + c3 > 1.0001):
+                ymin, xmin, ymax, xmax = y0, x0, c3, c2
+            elif c2 >= x0 and c3 >= y0 and (c2 - x0 > 0.0) and (c3 - y0 > 0.0) and (x0 > 0.3 or y0 > 0.3):
                 ymin, xmin, ymax, xmax = y0, x0, c3, c2
             else:
-                # coco: [xmin, ymin, w, h]
+                # Standard COCO [xmin, ymin, width, height]
                 ymin, xmin, ymax, xmax = y0, x0, min(1.0, y0 + c3), min(1.0, x0 + c2)
         else:
             # Absolute pixel coordinates
             x0, y0, c2, c3 = box
-            # If voc absolute: xmax >= xmin and ymax >= ymin
-            if c2 >= x0 and c3 >= y0 and c2 > img_width * 0.1 and c3 > img_height * 0.1:
+            if (x0 + c2 > img_width * 1.05) or (y0 + c3 > img_height * 1.05):
+                ymin = y0 / img_height
+                xmin = x0 / img_width
+                ymax = c3 / img_height
+                xmax = c2 / img_width
+            elif c2 >= x0 and c3 >= y0 and c2 > img_width * 0.1 and c3 > img_height * 0.1 and (x0 > img_width * 0.3 or y0 > img_height * 0.3):
                 ymin = y0 / img_height
                 xmin = x0 / img_width
                 ymax = c3 / img_height
                 xmax = c2 / img_width
             else:
-                # coco absolute: [xmin, ymin, w, h]
+                # Standard COCO absolute: [xmin, ymin, w, h]
                 ymin = y0 / img_height
                 xmin = x0 / img_width
                 ymax = (y0 + c3) / img_height
                 xmax = (x0 + c2) / img_width
                 
-        # Clamp to [0.0, 1.0]
+        ymin, ymax = min(ymin, ymax), max(ymin, ymax)
+        xmin, xmax = min(xmin, xmax), max(xmin, xmax)
         return [
             max(0.0, min(1.0, ymin)),
             max(0.0, min(1.0, xmin)),
